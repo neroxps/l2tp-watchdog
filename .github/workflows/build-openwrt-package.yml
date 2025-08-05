@@ -20,12 +20,10 @@ jobs:
         include:
           - arch: x86_64
             target: x86/64
-          - arch: arm_cortex-a9
-            target: armsr/axp
-          - arch: aarch64_cortex-a53
-            target: bcm27xx/bcm2710
-          - arch: mips_24kc
-            target: ath79/generic
+            sdk_url: https://archive.openwrt.org/chaos_calmer/15.05.1/x86/64/OpenWrt-SDK-15.05.1-x86-64_gcc-4.8-linaro_uClibc-0.9.33.2.Linux-x86_64.tar.bz2
+          - arch: mt7628
+            target: ramips/mt7628
+            sdk_url: https://archive.openwrt.org/chaos_calmer/15.05.1/ramips/mt7628/OpenWrt-SDK-15.05.1-ramips-mt7628_gcc-4.8-linaro_uClibc-0.9.33.2.Linux-x86_64.tar.bz2
 
     steps:
       - name: Checkout
@@ -35,10 +33,15 @@ jobs:
 
       - name: Setup OpenWrt SDK
         run: |
-          # Get the latest OpenWrt 23.05 release
-          SDK_URL="https://downloads.openwrt.org/releases/23.05.3/targets/${{ matrix.target }}/openwrt-sdk-23.05.3-${{ matrix.target }}_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          # Use the SDK URL from matrix
+          SDK_URL="${{ matrix.sdk_url }}"
           wget $SDK_URL
-          tar -xf openwrt-sdk-*.tar.xz
+          # Extract based on file extension
+          if [[ $SDK_URL == *.tar.bz2 ]]; then
+            tar -xf openwrt-sdk-*.tar.bz2
+          else
+            tar -xf openwrt-sdk-*.tar.xz
+          fi
           mv openwrt-sdk-* openwrt-sdk
           echo "SDK_ROOT=$(pwd)/openwrt-sdk" >> $GITHUB_ENV
 
