@@ -1,0 +1,126 @@
+name: Build OpenWrt Package
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build for ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            target: x86/64
+          - arch: arm_cortex-a9
+            target: armsr/axp
+          - arch: aarch64_cortex-a53
+            target: bcm27xx/bcm2710
+          - arch: mips_24kc
+            target: ath79/generic
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup OpenWrt SDK
+        run: |
+          # Get the latest OpenWrt 23.05 release
+          SDK_URL="https://downloads.openwrt.org/releases/23.05.3/targets/${{ matrix.target }}/openwrt-sdk-23.05.3-${{ matrix.target }}_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          wget $SDK_URL
+          tar -xf openwrt-sdk-*.tar.xz
+          mv openwrt-sdk-* openwrt-sdk
+          echo "SDK_ROOT=$(pwd)/openwrt-sdk" >> $GITHUB_ENV
+
+      - name: Prepare Package
+        run: |
+          # Create package directory
+          mkdir -p ${{ env.SDK_ROOT }}/package/luci-app-l2tp-watchdog
+          # Copy package files
+          cp -r $(pwd)/* ${{ env.SDK_ROOT }}/package/luci-app-l2tp-watchdog/
+          # Remove SDK directory from copied files
+          rm -rf ${{ env.SDK_ROOT }}/package/luci-app-l2tp-watchdog/openwrt-sdk
+
+      - name: Update and Install Feeds
+        run: |
+          cd ${{ env.SDK_ROOT }}
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Configure Package
+        run: |
+          cd ${{ env.SDK_ROOT }}
+          # Enable the package in config
+          echo "CONFIG_PACKAGE_luci-app-l2tp-watchdog=m" >> .config
+          # Use defconfig to resolve dependencies
+          make defconfig
+
+      - name: Compile Package
+        run: |
+          cd ${{ env.SDK_ROOT }}
+          # Compile only our package
+          make package/luci-app-l2tp-watchdog/compile V=s
+
+      - name: Collect IPK Files
+        run: |
+          cd ${{ env.SDK_ROOT }}
+          # Find and copy IPK files
+          find bin/packages -name "*l2tp-watchdog*.ipk" -exec cp {} $(pwd)/ \;
+          ls -la *.ipk
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: luci-app-l2tp-watchdog-${{ matrix.arch }}
+          path: ${{ env.SDK_ROOT }}/*.ipk
+
+  release:
+    name: Create Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        id: create_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Upload all IPK files
+          for artifact_dir in luci-app-l2tp-watchdog-*; do
+            if [ -d "$artifact_dir" ]; then
+              for ipk_file in "$artifact_dir"/*.ipk; do
+                if [ -f "$ipk_file" ]; then
+                  asset_name=$(basename "$ipk_file")
+                  upload_url=$(echo "${{ steps.create_release.outputs.upload_url }}" | sed "s/{?name,label}/?name=${asset_name}/")
+                  curl -X POST \
+                    -H "Authorization: token $GITHUB_TOKEN" \
+                    -H "Content-Type: application/octet-stream" \
+                    --data-binary @"$ipk_file" \
+                    "$upload_url"
+                fi
+              done
+            fi
+          done

@@ -2,6 +2,8 @@
 
 A Luci web interface for managing the L2TP VPN Watchdog service on OpenWrt routers.
 
+[![Build OpenWrt Package](https://github.com/neroxps/l2tp-watchdog/actions/workflows/build-openwrt-package.yml/badge.svg)](https://github.com/neroxps/l2tp-watchdog/actions/workflows/build-openwrt-package.yml)
+
 ## Features
 
 - Web-based configuration interface
@@ -67,6 +69,20 @@ LuCI -> Services -> VPN看门狗
 2. Use the Control page to start/stop the service
 3. Monitor the status on the Status page
 4. View logs on the Log page
+
+## GitHub Actions
+
+This repository includes GitHub Actions workflows to automatically build and release the package:
+
+- **Build OpenWrt Package**: Automatically builds the package for multiple architectures when pushing to main branch or creating tags.
+
+### Creating a Release
+
+To create a new release:
+
+1. Create a new tag: `git tag v1.0.0`
+2. Push the tag: `git push origin v1.0.0`
+3. The GitHub Actions workflow will automatically build the package and create a release with the IPK files attached.
 
 ## License
 

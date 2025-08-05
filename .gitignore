@@ -1,0 +1,26 @@
+# Build artifacts
+*.ipk
+bin/
+build/
+dist/
+*.tar.gz
+*.tar.xz
+openwrt-sdk/
+
+# IDE files
+.vscode/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
