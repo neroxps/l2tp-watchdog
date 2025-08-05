@@ -36,11 +36,13 @@ jobs:
           # Use the SDK URL from matrix
           SDK_URL="${{ matrix.sdk_url }}"
           wget $SDK_URL
+          # Get the downloaded file name
+          DOWNLOADED_FILE=$(ls OpenWrt-SDK-*)
           # Extract based on file extension
           if [[ $SDK_URL == *.tar.bz2 ]]; then
-            tar -xf openwrt-sdk-*.tar.bz2
+            tar -xjf $DOWNLOADED_FILE
           else
-            tar -xf openwrt-sdk-*.tar.xz
+            tar -xf $DOWNLOADED_FILE
           fi
           mv openwrt-sdk-* openwrt-sdk
           echo "SDK_ROOT=$(pwd)/openwrt-sdk" >> $GITHUB_ENV
