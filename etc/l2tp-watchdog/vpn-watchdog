@@ -1,0 +1,143 @@
+#!/bin/ash
+
+# L2TP VPN Keepalive Script
+# Adapted for OpenWrt
+
+LOGGER_TAG="l2tp_watchdog"
+
+# Load configuration from UCI
+CONFIG_FILE="/etc/config/l2tp-watchdog"
+load_config() {
+    # Check if config file exists
+    if [ ! -f "$CONFIG_FILE" ]; then
+        logger -t $LOGGER_TAG "Config file not found, using default values"
+        return 1
+    fi
+    
+    # Load UCI configuration
+    eval $(/usr/bin/uci -q export l2tp-watchdog | sed -e 's/^[^.]*\.//g' -e 's/\.=/=/g')
+    
+    # Set variables from UCI config or use defaults
+    VPN_INTERFACE="${interface:-VPN}"
+    VPN_GATEWAY="${gateway:-10.2.0.1}"
+    TEST_IP="${test_ip:-223.5.5.5}"
+    CHECK_INTERVAL="${check_interval:-5}"
+    INITIAL_DELAY="${initial_delay:-120}"
+    MAX_RETRIES="${max_retries:-5}"
+    RETRY_DELAY="${retry_delay:-10}"
+    CONN_TIMEOUT="${conn_timeout:-30}"
+}
+
+# Load configuration
+load_config
+
+# Log loaded configuration
+logger -t $LOGGER_TAG "Loaded config: interface=$VPN_INTERFACE, gateway=$VPN_GATEWAY, test_ip=$TEST_IP"
+
+logger -t $LOGGER_TAG "Starting l2tp_watchdog"
+
+# Wait for system initialization
+sleep $INITIAL_DELAY
+
+# Start VPN interface (using correct OpenWrt commands)
+start_vpn() {
+    logger -t $LOGGER_TAG "Starting VPN interface [${VPN_INTERFACE}]"
+
+    # Use OpenWrt network command to start interface
+    if /sbin/ifup $VPN_INTERFACE; then
+        # Wait for interface to establish
+        local timeout=$CONN_TIMEOUT
+        while [ $timeout -gt 0 ]; do
+            # Check logical interface status
+            if ubus call network.interface.${VPN_INTERFACE} status | grep -q '"up": true'; then
+                logger -t $LOGGER_TAG "VPN interface started successfully"
+                return 0
+            fi
+            sleep 1
+            timeout=$((timeout-1))
+        done
+    fi
+
+    logger -t $LOGGER_TAG "Failed to start VPN interface"
+    return 1
+}
+
+# Stop VPN interface
+stop_vpn() {
+    logger -t $LOGGER_TAG "Stopping VPN interface [${VPN_INTERFACE}]"
+    /sbin/ifdown $VPN_INTERFACE
+    sleep 2
+}
+
+# Check VPN interface status
+is_vpn_up() {
+    ubus call network.interface.${VPN_INTERFACE} status | grep -q '"up": true'
+    return $?
+}
+
+# Check VPN gateway connectivity
+check_vpn_gateway() {
+    if ping -c 3 -W 10 $VPN_GATEWAY >/dev/null 2>&1; then
+        logger -t $LOGGER_TAG "VPN gateway($VPN_GATEWAY) reachable"
+        return 0
+    else
+        logger -t $LOGGER_TAG "VPN gateway($VPN_GATEWAY) unreachable"
+        return 1
+    fi
+}
+
+# Main loop
+while true; do
+    # First check basic network connectivity
+    if ping -c 3 -W 10 $TEST_IP >/dev/null 2>&1; then
+        logger -t $LOGGER_TAG "Network connectivity established"
+
+        # Check if VPN interface is running
+        if ! is_vpn_up; then
+            logger -t $LOGGER_TAG "VPN interface not active, attempting startup"
+            start_vpn
+        else
+            # VPN interface active, check gateway connectivity
+            if ! check_vpn_gateway; then
+                logger -t $LOGGER_TAG "VPN gateway unreachable, attempting recovery"
+
+                stop_vpn
+                sleep 1
+
+                counter=0
+                while [ $counter -lt $MAX_RETRIES ]; do
+                    counter=$((counter+1))
+                    logger -t $LOGGER_TAG "Connection recovery attempt ($counter/$MAX_RETRIES)"
+
+                    # Try to restart VPN
+                    if start_vpn; then
+                        # Check gateway connectivity
+                        if check_vpn_gateway; then
+                            logger -t $LOGGER_TAG "VPN connection recovered successfully"
+                            break
+                        else
+                            logger -t $LOGGER_TAG "Interface up but gateway unreachable"
+                        fi
+                    fi
+
+                    sleep $RETRY_DELAY
+                done
+
+                if [ $counter -eq $MAX_RETRIES ]; then
+                    logger -t $LOGGER_TAG "VPN recovery failed, max attempts exceeded"
+                fi
+            else
+                logger -t $LOGGER_TAG "VPN active and gateway reachable"
+            fi
+        fi
+    else
+        logger -t $LOGGER_TAG "Network connectivity unavailable, waiting for recovery"
+        # If VPN is running but network is down, stop VPN
+        if is_vpn_up; then
+            logger -t $LOGGER_TAG "Network down, stopping VPN"
+            stop_vpn
+        fi
+    fi
+
+    sleep $CHECK_INTERVAL
+done

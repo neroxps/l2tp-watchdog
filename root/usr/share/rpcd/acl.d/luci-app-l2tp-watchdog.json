@@ -1,0 +1,11 @@
+{
+	"luci-app-l2tp-watchdog": {
+		"description": "Grant UCI access for luci-app-l2tp-watchdog",
+		"read": {
+			"uci": [ "l2tp-watchdog" ]
+		},
+		"write": {
+			"uci": [ "l2tp-watchdog" ]
+		}
+	}
+}

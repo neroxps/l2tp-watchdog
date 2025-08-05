@@ -1,0 +1,11 @@
+config l2tp-watchdog
+    option enabled 1
+    option logger_tag 'l2tp_watchdog'
+    option vpn_interface 'VPN'
+    option vpn_gateway '10.2.0.1'
+    option test_ip '223.5.5.5'
+    option check_interval '5'
+    option initial_delay '120'
+    option max_retries '5'
+    option retry_delay '10'
+    option conn_timeout '30'
