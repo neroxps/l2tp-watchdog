@@ -1,15 +1,30 @@
 name: Build OpenWrt Package
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*'
-  pull_request:
-    branches:
-      - main
+  # push:
+  #   branches:
+  #     - main
+  #   tags:
+  #     - 'v*'
+  # pull_request:
+  #   branches:
+  #     - main
   workflow_dispatch:
+    inputs:
+      arch:
+        description: 'Target architecture to build'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - x86_64
+        - mt7628
+        - x86_64_21.02.1
+
+# When triggering this workflow manually, select the architecture you want to build.
+# The workflow will create separate jobs for each architecture in the matrix.
+# If you select a specific architecture, only that job will run.
 
 jobs:
   build:
@@ -24,6 +39,9 @@ jobs:
           - arch: mt7628
             target: ramips/mt7628
             sdk_url: https://archive.openwrt.org/chaos_calmer/15.05.1/ramips/mt7628/OpenWrt-SDK-15.05.1-ramips-mt7628_gcc-4.8-linaro_uClibc-0.9.33.2.Linux-x86_64.tar.bz2
+          - arch: x86_64_21.02.1
+            target: x86/64
+            sdk_url: https://mirror-03.infra.openwrt.org/releases/21.02.1/targets/x86/64/openwrt-sdk-21.02.1-x86-64_gcc-8.4.0_musl.Linux-x86_64.tar.xz
 
     steps:
       - name: Checkout
@@ -41,6 +59,8 @@ jobs:
           # Extract based on file extension
           if [[ $SDK_URL == *.tar.bz2 ]]; then
             tar -xjf $DOWNLOADED_FILE
+          elif [[ $SDK_URL == *.tar.xz ]]; then
+            tar -xJf $DOWNLOADED_FILE
           else
             tar -xf $DOWNLOADED_FILE
           fi
