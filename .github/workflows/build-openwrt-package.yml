@@ -41,7 +41,7 @@ jobs:
             sdk_url: https://archive.openwrt.org/chaos_calmer/15.05.1/ramips/mt7628/OpenWrt-SDK-15.05.1-ramips-mt7628_gcc-4.8-linaro_uClibc-0.9.33.2.Linux-x86_64.tar.bz2
           - arch: x86_64_21.02.1
             target: x86/64
-            sdk_url: https://mirror-03.infra.openwrt.org/releases/21.02.1/targets/x86/64/openwrt-sdk-21.02.1-x86-64_gcc-8.4.0_musl.Linux-x86_64.tar.xz
+            sdk_url: https://downloads.openwrt.org/releases/21.02.1/targets/x86/64/openwrt-sdk-21.02.1-x86-64_gcc-8.4.0_musl.Linux-x86_64.tar.xz
 
     steps:
       - name: Checkout
@@ -55,7 +55,7 @@ jobs:
           SDK_URL="${{ matrix.sdk_url }}"
           wget $SDK_URL
           # Get the downloaded file name
-          DOWNLOADED_FILE=$(ls OpenWrt-SDK-*)
+          DOWNLOADED_FILE=$(ls OpenWrt-SDK-* openwrt-sdk-* | head -n 1)
           # Extract based on file extension
           if [[ $SDK_URL == *.tar.bz2 ]]; then
             tar -xjf $DOWNLOADED_FILE
@@ -64,7 +64,15 @@ jobs:
           else
             tar -xf $DOWNLOADED_FILE
           fi
-          mv openwrt-sdk-* openwrt-sdk
+          # Handle different SDK directory naming conventions
+          SDK_DIR=$(ls -d OpenWrt-SDK-* openwrt-sdk-* | head -n 1)
+          if [ -n "$SDK_DIR" ] && [ -d "$SDK_DIR" ]; then
+            mv "$SDK_DIR" openwrt-sdk
+          else
+            echo "Error: SDK directory not found"
+            ls -la
+            exit 1
+          fi
           echo "SDK_ROOT=$(pwd)/openwrt-sdk" >> $GITHUB_ENV
 
       - name: Prepare Package
